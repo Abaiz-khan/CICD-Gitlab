@@ -1,0 +1,12 @@
+Run the following command in the two-tire-application directory
+docker compose up 
+You will be able to access the application on localhost:4200
+
+To deploy infrastructure on azure there are some pre requsites
+az cli downloaded
+az login (so that local terminal is connected to azure)
+
+Then run the following commands in iac directory
+terraform init
+terraform plan
+terraofrm apply 

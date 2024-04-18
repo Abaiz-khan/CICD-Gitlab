@@ -1,0 +1,89 @@
+# .gitlab-ci.yml
+
+stages:
+  - dotnet_build
+  - angular_build
+  - docker_build
+  - deployment
+
+dotnet_build:
+  stage: dotnet_build
+  image: mcr.microsoft.com/dotnet/sdk:8.0  # Use the appropriate Dotnet SDK version
+  script:
+    - cd Dotnet/ProductsAPI
+    - dotnet restore
+    - dotnet build --no-restore
+    - dotnet test --no-build --verbosity normal  # Assuming this command starts your Dotnet application
+  only:
+    - main  # Run this stage only for the main branch
+
+angular_build:
+  stage: angular_build
+  image: node:18  # Use the appropriate Node.js version
+  before_script:
+    - cd Product-APP
+    - npm install -g @angular/cli
+    - npm install
+  script:
+    - ng build 
+  only:
+    - main  # Run this stage only for the main  branch
+
+docker_build_dotnet:
+  stage: docker_build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - cd Dotnet/ProductsAPI
+    - docker build -t two-tireapplication_backend-service .
+    - docker tag two-tireapplication_backend-service imagetwotire.azurecr.io/two-tireapplication_backend-service:latest
+    - docker login $ACR_LOGIN_SERVER -u $ACR_USERNAME -p $ACR_PASSWORD
+    - docker push imagetwotire.azurecr.io/two-tireapplication_backend-service:latest
+  only:
+    - main  # Run this stage only for the main branch
+  variables:
+    ACR_LOGIN_SERVER: imagetwotire.azurecr.io
+    ACR_USERNAME: $CI_REGISTRY_USER
+    ACR_PASSWORD: $CI_REGISTRY_PASSWORD    
+
+docker_build_angular:
+  stage: docker_build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - cd Product-APP
+    - docker build -t two-tireapplication_frontend-service .
+    - docker tag two-tireapplication_frontend-service imagetwotire.azurecr.io/two-tireapplication_frontend-service:latest
+    - docker login $ACR_LOGIN_SERVER -u $ACR_USERNAME -p $ACR_PASSWORD
+    - docker push imagetwotire.azurecr.io/two-tireapplication_frontend-service:latest
+  only:
+    - main  # Run this stage only for the main branch
+  variables:
+    ACR_LOGIN_SERVER: imagetwotire.azurecr.io
+    ACR_USERNAME: $CI_REGISTRY_USER
+    ACR_PASSWORD: $CI_REGISTRY_PASSWORD
+
+deployment:
+  stage: deployment
+  image: mcr.microsoft.com/azure-cli:latest  
+  script:
+    - apk add curl
+    - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    - chmod +x kubectl
+    - mv kubectl /usr/local/bin/
+    - kubectl version --client
+    - cd DeploymentDefinitions
+    - az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+    - az aks get-credentials --resource-group deployment-demo-tf --name demodeploy
+    - kubectl apply -f new.yml
+    - kubectl apply -f frontend.yml
+    - sleep 20  # wait 20 seconds to retrive external ip for both services
+    - kubectl get events
+    - kubectl get services
+  only:
+    - main   
+  needs:
+    - docker_build_angular
+    - docker_build_dotnet  

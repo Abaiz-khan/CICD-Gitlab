@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  backend-service:
+    build:
+      context: ./Dotnet/ProductsAPI
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080" # Map the service's port to the host machine
+
+  frontend-service:
+    build:
+      context: ./Product-APP
+      dockerfile: Dockerfile
+    ports:
+      - "4200:4200" # Map the service's port to the host machine
